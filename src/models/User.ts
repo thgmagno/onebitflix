@@ -1,67 +1,83 @@
-import { DataTypes, Model, Optional } from "sequelize"
-import { sequelize } from "../database"
-import * as bcrypt from 'bcrypt'
+import { DataTypes, Model, Optional } from "sequelize";
+import { sequelize } from "../database";
+import * as bcrypt from 'bcrypt';
 
-export interface User {
-  id: number
-  firstName: string
-  lastName: string
-  phone: string
-  birth: Date
-  email: string
-  password: string
-  role: 'admin' | 'user'
+type CheckPasswordCallback = (err: Error | undefined, isSame: boolean) => void
+
+export interface UserAttributes {
+  id: number;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  birth: Date;
+  email: string;
+  password: string;
+  role: 'admin' | 'user';
 }
 
-export interface UserCreationAttributes extends Optional<User, 'id'>{}
+export interface UserCreationAttributes extends Optional<UserAttributes, 'id'> { }
 
-export interface UserInstance extends Model<User, UserCreationAttributes>, User {}
+export interface UserInstance extends Model<UserAttributes, UserCreationAttributes>, UserAttributes {
+  checkPassword: (password: string, callbackfn: CheckPasswordCallback) => void
+}
 
-export const User = sequelize.define<UserInstance, User>('User', {
+export const User = sequelize.define<UserInstance>('User', {
   id: {
     allowNull: false,
     autoIncrement: true,
     primaryKey: true,
-    type: DataTypes.INTEGER
+    type: DataTypes.INTEGER,
   },
   firstName: {
     allowNull: false,
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
   },
   lastName: {
     allowNull: false,
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
   },
   phone: {
     allowNull: false,
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
   },
   birth: {
     allowNull: false,
-    type: DataTypes.DATE
+    type: DataTypes.DATE,
   },
-  email:{
+  email: {
     allowNull: false,
     unique: true,
     type: DataTypes.STRING,
     validate: {
-      isEmail: true
-    }
+      isEmail: true,
+    },
   },
   password: {
     allowNull: false,
-    type: DataTypes.STRING
+    type: DataTypes.STRING,
   },
   role: {
     allowNull: false,
-    type: DataTypes.STRING
-  }
+    type: DataTypes.STRING,
+  },
 }, {
   hooks: {
     beforeSave: async (user) => {
       if (user.isNewRecord || user.changed('password')) {
-        user.password = await bcrypt.hash(user.password.toString(), 10)
+        user.password = await bcrypt.hash(user.password.toString(), 10);
       }
     }
   }
-})
+}) as unknown as typeof Model & {
+  new(): UserInstance
+};
+
+(User as any).prototype.checkPassword = function (password: string, callbackfn: CheckPasswordCallback) {
+  bcrypt.compare(password, this.password, (err, isSame) => {
+    if (err) {
+      callbackfn(err, false)
+    } else {
+      callbackfn(err, isSame)
+    }
+  })
+}
